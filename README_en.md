@@ -27,6 +27,7 @@ Lightweight Docker container that allows MikroTik routers to connect to AmneziaW
   - [Insufficient disk space](#insufficient-disk-space)
   - [not allowed by device-mode](#not-allowed-by-device-mode)
   - [child spawn failed / could not load next layer](#child-spawn-failed--could-not-load-next-layer)
+  - [exited with signal 4 (Illegal instruction)](#exited-with-signal-4-illegal-instruction)
   - [RU address list not loading after reboot](#ru-address-list-not-loading-after-reboot)
   - [Handshake fails after backup restore](#handshake-fails-after-backup-restore)
 - [Building from Source](#building-from-source)
@@ -71,7 +72,7 @@ Compatible with AWG v1 and v2 -- the version is detected automatically based on 
    - Install the **container** package from [mikrotik.com](https://mikrotik.com/download) (System → Packages), upload it to the router and reboot
    - Enable device-mode:
      ```routeros
-     /system/device-mode/update container=yes fetch=yes
+     /system/device-mode/update container=yes fetch=yes bandwidth-test=yes scheduler=yes
      ```
      The router will ask for confirmation (press Reset/Mode button or wait for reboot)
 1. Export a `.conf` file from AmneziaVPN (see [Getting AWG Parameters](#getting-awg-parameters))
@@ -93,7 +94,7 @@ Done. The configurator works offline; no data is sent to any server.
   - **RouterOS 7.21+**: standard images `awg-proxy-{arch}.tar.gz` (OCI format)
   - **RouterOS 7.20 and below**: images `awg-proxy-{arch}-7.20-Docker.tar.gz` (Docker format)
   - The configurator detects the version automatically
-- Architecture: ARM64, ARM (v7), or x86_64 ([check your device](https://help.mikrotik.com/docs/spaces/ROS/pages/84901929/Container))
+- Architecture: ARM64, ARM (v7), ARM (v5: hEX refresh / hEX S 2025), or x86_64 ([check your device](https://help.mikrotik.com/docs/spaces/ROS/pages/84901929/Container))
 - At least 256 KB free disk space (or a USB drive)
 - At least 16 MB free RAM
 
@@ -104,16 +105,18 @@ Done. The configurator works offline; no data is sent to any server.
 Install the container package from [mikrotik.com](https://mikrotik.com/download), upload it to the router, and reboot. Then:
 
 ```routeros
-/system/device-mode/update container=yes fetch=yes
+/system/device-mode/update container=yes fetch=yes bandwidth-test=yes scheduler=yes
 ```
 
-`fetch=yes` is required to download the image directly on the router via `/tool/fetch`. If you plan to upload the file manually via Winbox/SCP, `fetch=yes` is not required.
+`fetch=yes` is required to download the image directly on the router via `/tool/fetch`. If you plan to upload the file manually via Winbox/SCP, `fetch=yes` is not required. `scheduler=yes` is required for RU list auto-updates (the "non-RU traffic through tunnel" scenario), `bandwidth-test=yes` -- for speed testing via `/tool/bandwidth-test`.
 
 The router will ask for confirmation (button press or reboot, depending on the model).
 
 ### 2. Upload Image
 
 Download `awg-proxy-{arch}.tar.gz` from [Releases](https://github.com/timbrs/amneziawg-mikrotik-c/releases) and upload it to the router via Winbox or SCP. For RouterOS 7.20 and below, use files with the `-7.20-Docker` suffix (Docker format).
+
+> **hEX refresh (E50UG) and hEX S 2025 (E60iUGS):** despite `architecture-name: arm`, the EN7562CT CPU only executes arm32v5 images ([RouterOS limitation](https://help.mikrotik.com/docs/spaces/ROS/pages/84901929/Container)) — use `awg-proxy-armv5.tar.gz`, otherwise the container crashes with `exited with signal 4 (Illegal instruction)`. The configurator detects these devices automatically.
 
 Or download directly on the router (replace URL with the actual one):
 
@@ -272,6 +275,8 @@ services:
 > Replace AWG_JC, AWG_S1, AWG_H1--H4 etc. with your values. These parameters must match on the server and all clients.
 
 > In server mode, `AWG_CLIENT_PUBS` / `AWG_CLIENT_PUBS_FILE` is the new explicit list of **real client public keys** required for direct AmneziaWG 2.0 clients. `AWG_CLIENT_PUB` remains a legacy single-peer / proxy-only fallback. The old `proxy → server → WG` placeholder setup still works because the normal client-side proxy rewrites inbound MAC1 one more time. A direct client does not have that extra rewrite, so a placeholder alone is no longer sufficient.
+
+> If pulling the image from ghcr.io is not possible, build it locally: clone the repository, run `docker build -t awg-proxy .`, and set `image: awg-proxy` in the compose file.
 
 ```bash
 docker compose up -d
@@ -460,6 +465,10 @@ With 3+ clients, this is easier to automate with a script on the server.
 | `AWG_S4` | No | `0` | Transport data padding (v2) |
 | `AWG_I1`--`AWG_I5` | No | -- | CPS templates (v1.5/v2) |
 | `AWG_MODE` | No | `normal` | Operating mode: `normal`, `reverse`, `server` |
+| `AWG_FB_H1`--`AWG_FB_H4` | No | -- | Fallback (v1) obfuscation profile: message types. Enables fallback (`normal`/`reverse` only); requires `AWG_S4=0` |
+| `AWG_FB_S1`, `AWG_FB_S2` | Yes** | -- | Init/response padding for the fallback profile |
+| `AWG_FB_S3` | No | `0` | Cookie reply padding for the fallback profile |
+| `AWG_FB_AFTER` | No | `20` | Seconds of remote silence before probing the other profile (initiator) |
 | `AWG_SRC_PORT` | No | auto | Outgoing port to server |
 | `AWG_TIMEOUT` | No | `180` | Inactivity timeout (sec) |
 | `AWG_LOG_LEVEL` | No | `info` | Log level |
@@ -472,7 +481,11 @@ With 3+ clients, this is easier to automate with a script on the server.
 
 `*` In `server` mode, you must set either the legacy `AWG_CLIENT_PUB` fallback or the explicit direct-peer list via `AWG_CLIENT_PUBS` / `AWG_CLIENT_PUBS_FILE`.
 
+`**` Required only when the fallback profile is enabled (`AWG_FB_H1` is set).
+
 The protocol version is detected automatically: **v2** if S3/S4 are set or H values are ranges, **v1.5** if CPS templates (I1-I5) are set, otherwise **v1**.
+
+**Fallback profile (site-to-site backward compatibility / DPI resilience).** The primary profile (`AWG_S*`, `AWG_H*`, `AWG_I*`) may be v2, while `AWG_FB_*` defines a second, v1 profile (fixed H, no S3/S4/CPS). The initiator (`normal`) runs on the primary profile and, if the remote stays silent for longer than `AWG_FB_AFTER` seconds, rarely switches to the fallback and back until it finds a working one. The responder (`reverse`) accepts both profiles and replies with whichever one the handshake arrived on. For the site-to-site scenario the configurator generates identical primary+fallback profiles on both sides: if the primary obfuscation starts getting blocked, the tunnel automatically falls back to the secondary. Requires `AWG_S4=0`; not supported in `server` mode.
 
 ### Detailed Variable Descriptions
 
@@ -817,6 +830,10 @@ Enable debug logging on both containers:
 ```
 Restart the containers and check logs — they will show DNS resolution errors, connect failures, handshake init and junk packet sending.
 
+**5. Fallback profile**
+
+Site-to-site configs from the configurator carry a primary (v2) and a fallback (v1) obfuscation profile. If the primary obfuscation gets blocked, after `AWG_FB_AFTER` seconds of remote silence the initiator switches to the fallback on its own — the logs show `fallback: remote silent, trying v1 fallback profile` (initiator) and `c2s: peer uses v1 fallback profile, switched` (responder). The startup line `config: v1 fallback enabled` confirms the fallback profile is set. Both ends must be generated by the same configurator run, otherwise their profiles won't match.
+
 **No handshake** -- make sure all AWG parameters (Jc, Jmin, Jmax, S1, S2, H1--H4) exactly match the server. Verify `AWG_REMOTE`, `AWG_SERVER_PUB`, and `AWG_CLIENT_PUB`. For diagnostics, set `AWG_LOG_LEVEL=debug` -- logs will show handshake init and junk packet sending. If you see `remote read error (Connection refused)` -- the server is unreachable or the port is wrong. On ARM64, try `AWG_NO_GRO=1` -- if the kernel doesn't support GRO, the proxy may hang waiting for a response.
 
 **No traffic after handshake** -- check the NAT rule (`/ip/firewall/nat/print`), routing, and the peer's `endpoint-address` (should be `172.18.0.2`).
@@ -863,10 +880,11 @@ If using the configurator -- select the appropriate drive in the "Container stor
 
 ### not allowed by device-mode
 
-The `not allowed by device-mode` error occurs in two cases:
+The `not allowed by device-mode` error occurs in three cases:
 
 - When creating a container -- container support is not enabled (`container=no`)
 - When downloading an image via `/tool/fetch` -- fetch is not enabled (`fetch=no`)
+- When creating a scheduler (`/system/scheduler/add`) -- scheduler is not enabled (`scheduler=no`); without it the RU list never auto-updates and timeout entries silently expire after 30 days
 
 Check the current state:
 
@@ -877,7 +895,7 @@ Check the current state:
 Then enable the required features:
 
 ```routeros
-/system/device-mode/update container=yes fetch=yes
+/system/device-mode/update container=yes fetch=yes bandwidth-test=yes scheduler=yes
 ```
 
 The router will ask for confirmation -- press the Reset or Mode button on the device (depends on model) within a few minutes, or wait for automatic reboot. After reboot, retry the installation.
@@ -913,6 +931,26 @@ Checklist:
    ```routeros
    /container add file=awg-proxy-arm.tar.gz ...
    ```
+
+### exited with signal 4 (Illegal instruction)
+
+The container crashes immediately with:
+
+```
+*** error: exited with signal 4 (Illegal instruction)
+```
+
+Cause: the image is built for a newer CPU architecture than the router has. The typical case is **hEX refresh (E50UG)** and **hEX S 2025 (E60iUGS)**: their EN7562CT CPU reports `architecture-name: arm` but only executes arm32v5 images (a [RouterOS limitation](https://help.mikrotik.com/docs/spaces/ROS/pages/84901929/Container)), while the standard `awg-proxy-arm.tar.gz` is built for ARMv7.
+
+Solution -- use the armv5 image:
+
+```routeros
+/container/remove [find where comment=awg-proxy]
+/tool/fetch url="https://github.com/timbrs/amneziawg-mikrotik-c/releases/latest/download/awg-proxy-armv5.tar.gz" dst-path=awg-proxy-armv5.tar.gz
+/container/add file=awg-proxy-armv5.tar.gz ... # other parameters as before
+```
+
+For RouterOS 7.20 and below use `awg-proxy-armv5-7.20-Docker.tar.gz`. Fresh configs from the configurator detect these devices automatically.
 
 ### RU address list not loading after reboot
 
