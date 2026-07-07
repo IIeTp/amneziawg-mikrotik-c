@@ -54,6 +54,9 @@ jobs:
       - name: Install packer dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends make python3 file skopeo
 
+      - name: Run unit tests
+        run: make -C routeros-app test
+
       - name: Build static binaries
         shell: bash
         run: |
