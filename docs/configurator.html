@@ -708,7 +708,12 @@
         <div id="netwatch-row" style="margin-top:8px">
             <label><input type="checkbox" id="netwatch-enable" checked>
             <span data-i18n="netwatchLabel">Netwatch failover</span></label>
-            <div class="hint" data-i18n="netwatchHint">Monitors tunnel availability by pinging 1.1.1.1 through the WG interface. If the tunnel is down, disables its route &mdash; traffic falls back to the next tunnel (by distance) or goes direct. Re-enables the route when the tunnel recovers.</div>
+            <div class="hint" data-i18n="netwatchHint">Monitors tunnel availability by pinging 8.8.8.8 through the WG interface (via a pinned probe route). If the tunnel is down, disables its route &mdash; traffic falls back to the next tunnel (by distance) or goes direct. Re-enables the route when the tunnel recovers.</div>
+        </div>
+        <div id="df-row" style="margin-top:8px">
+            <label><input type="checkbox" id="df-enable">
+            <span data-i18n="dfLabel">Clear DF bit on UDP (DPI workaround)</span></label>
+            <div class="hint" data-i18n="dfHint">Adds AWG_NO_DF=1 to the container ENV: the proxy clears the Don&rsquo;t Fragment bit on its UDP packets. Some DPI equipment passes DF=0 UDP better than DF=1. Enable only if the tunnel has connectivity issues &mdash; with DF=0 large packets may be fragmented along the path.</div>
         </div>
         <div id="storage-row" style="margin-top:14px">
             <label for="storage-select" data-i18n="storageLabel">Container storage</label>
@@ -732,7 +737,7 @@
         <div style="margin-top:14px">
             <label for="prefix-select" data-i18n="prefixLabel">Tunnel name (prefix)</label>
             <select id="prefix-select">
-                <option value="awg-proxy" data-i18n="pAwg1">awg-proxy &mdash; 1st tunnel (default)</option>
+                <option value="awg-proxy-1" data-i18n="pAwg1">awg-proxy-1 &mdash; 1st tunnel (default)</option>
                 <option value="awg-proxy-2" data-i18n="pAwg2">awg-proxy-2 &mdash; 2nd tunnel</option>
                 <option value="awg-proxy-3" data-i18n="pAwg3">awg-proxy-3 &mdash; 3rd tunnel</option>
                 <option value="awg-proxy-4" data-i18n="pAwg4">awg-proxy-4 &mdash; 4th tunnel</option>
@@ -1034,14 +1039,16 @@
             sNvme1: 'nvme1/ \u2014 NVMe SSD',
             sSata1: 'sata1/ \u2014 SATA drive',
             sCustom: 'Custom...',
-            pAwg1: 'awg-proxy \u2014 1st tunnel (default)',
+            pAwg1: 'awg-proxy-1 \u2014 1st tunnel (default)',
             pAwg2: 'awg-proxy-2 \u2014 2nd tunnel',
             pAwg3: 'awg-proxy-3 \u2014 3rd tunnel',
             pAwg4: 'awg-proxy-4 \u2014 4th tunnel',
             pAwg5: 'awg-proxy-5 \u2014 5th tunnel',
             pCustom: 'Custom...',
             netwatchLabel: 'Netwatch failover',
-            netwatchHint: 'Monitors tunnel availability by pinging 1.1.1.1 through the WG interface. If the tunnel is down, disables its route \u2014 traffic falls back to the next tunnel (by distance) or goes direct. Re-enables when the tunnel recovers.',
+            netwatchHint: 'Monitors tunnel availability by pinging 8.8.8.8 through the WG interface (via a pinned probe route). If the tunnel is down, disables its route \u2014 traffic falls back to the next tunnel (by distance) or goes direct. Re-enables when the tunnel recovers.',
+            dfLabel: 'Clear DF bit on UDP (DPI workaround)',
+            dfHint: 'Adds AWG_NO_DF=1 to the container ENV: the proxy clears the Don\u2019t Fragment bit on its UDP packets. Some DPI equipment passes DF=0 UDP better than DF=1. Enable only if the tunnel has connectivity issues \u2014 with DF=0 large packets may be fragmented along the path.',
             scenarioLabel: 'Routing scenario',
             scenarioTunnel: 'Tunnel only (manual routes)',
             scenarioDns: 'DNS-based routing for services',
@@ -1209,14 +1216,16 @@
             sNvme1: 'nvme1/ \u2014 NVMe SSD',
             sSata1: 'sata1/ \u2014 SATA \u0434\u0438\u0441\u043a',
             sCustom: '\u0414\u0440\u0443\u0433\u043e\u0435...',
-            pAwg1: 'awg-proxy \u2014 1-\u0439 \u0442\u0443\u043d\u043d\u0435\u043b\u044c (\u043f\u043e \u0443\u043c\u043e\u043b\u0447.)',
+            pAwg1: 'awg-proxy-1 \u2014 1-\u0439 \u0442\u0443\u043d\u043d\u0435\u043b\u044c (\u043f\u043e \u0443\u043c\u043e\u043b\u0447.)',
             pAwg2: 'awg-proxy-2 \u2014 2-\u0439 \u0442\u0443\u043d\u043d\u0435\u043b\u044c',
             pAwg3: 'awg-proxy-3 \u2014 3-\u0439 \u0442\u0443\u043d\u043d\u0435\u043b\u044c',
             pAwg4: 'awg-proxy-4 \u2014 4-\u0439 \u0442\u0443\u043d\u043d\u0435\u043b\u044c',
             pAwg5: 'awg-proxy-5 \u2014 5-\u0439 \u0442\u0443\u043d\u043d\u0435\u043b\u044c',
             pCustom: '\u0414\u0440\u0443\u0433\u043e\u0435...',
             netwatchLabel: 'Netwatch failover',
-            netwatchHint: '\u041f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e\u0441\u0442\u044c \u0442\u0443\u043d\u043d\u0435\u043b\u044f \u043f\u0438\u043d\u0433\u043e\u043c 1.1.1.1 \u0447\u0435\u0440\u0435\u0437 WG-\u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441. \u0415\u0441\u043b\u0438 \u0442\u0443\u043d\u043d\u0435\u043b\u044c \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d \u2014 \u043e\u0442\u043a\u043b\u044e\u0447\u0430\u0435\u0442 \u0435\u0433\u043e \u043c\u0430\u0440\u0448\u0440\u0443\u0442, \u0442\u0440\u0430\u0444\u0438\u043a \u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0430\u0435\u0442\u0441\u044f \u043d\u0430 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439 \u0442\u0443\u043d\u043d\u0435\u043b\u044c (\u043f\u043e distance) \u0438\u043b\u0438 \u0438\u0434\u0451\u0442 \u043d\u0430\u043f\u0440\u044f\u043c\u0443\u044e. \u041f\u0440\u0438 \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0438 \u043c\u0430\u0440\u0448\u0440\u0443\u0442 \u0432\u043a\u043b\u044e\u0447\u0430\u0435\u0442\u0441\u044f \u043e\u0431\u0440\u0430\u0442\u043d\u043e.',
+            netwatchHint: '\u041f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e\u0441\u0442\u044c \u0442\u0443\u043d\u043d\u0435\u043b\u044f \u043f\u0438\u043d\u0433\u043e\u043c 8.8.8.8 \u0447\u0435\u0440\u0435\u0437 WG-\u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441 (\u0447\u0435\u0440\u0435\u0437 \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0451\u043d\u043d\u044b\u0439 probe-\u043c\u0430\u0440\u0448\u0440\u0443\u0442). \u0415\u0441\u043b\u0438 \u0442\u0443\u043d\u043d\u0435\u043b\u044c \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d \u2014 \u043e\u0442\u043a\u043b\u044e\u0447\u0430\u0435\u0442 \u0435\u0433\u043e \u043c\u0430\u0440\u0448\u0440\u0443\u0442, \u0442\u0440\u0430\u0444\u0438\u043a \u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0430\u0435\u0442\u0441\u044f \u043d\u0430 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439 \u0442\u0443\u043d\u043d\u0435\u043b\u044c (\u043f\u043e distance) \u0438\u043b\u0438 \u0438\u0434\u0451\u0442 \u043d\u0430\u043f\u0440\u044f\u043c\u0443\u044e. \u041f\u0440\u0438 \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0438 \u043c\u0430\u0440\u0448\u0440\u0443\u0442 \u0432\u043a\u043b\u044e\u0447\u0430\u0435\u0442\u0441\u044f \u043e\u0431\u0440\u0430\u0442\u043d\u043e.',
+            dfLabel: '\u0423\u0431\u0440\u0430\u0442\u044c DF-\u0431\u0438\u0442 \u0441 UDP (\u043e\u0431\u0445\u043e\u0434 \u0422\u0421\u041f\u0423)',
+            dfHint: '\u0414\u043e\u0431\u0430\u0432\u043b\u044f\u0435\u0442 AWG_NO_DF=1 \u0432 \u043f\u0435\u0440\u0435\u043c\u0435\u043d\u043d\u044b\u0435 \u043a\u043e\u043d\u0442\u0435\u0439\u043d\u0435\u0440\u0430: \u043f\u0440\u043e\u043a\u0441\u0438 \u0441\u043d\u0438\u043c\u0430\u0435\u0442 Don\u2019t Fragment \u0431\u0438\u0442 \u0441\u043e \u0441\u0432\u043e\u0438\u0445 UDP-\u043f\u0430\u043a\u0435\u0442\u043e\u0432. \u0427\u0430\u0441\u0442\u044c DPI-\u043e\u0431\u043e\u0440\u0443\u0434\u043e\u0432\u0430\u043d\u0438\u044f (\u0422\u0421\u041f\u0423) \u043b\u0443\u0447\u0448\u0435 \u043f\u0440\u043e\u043f\u0443\u0441\u043a\u0430\u0435\u0442 UDP \u0441 DF=0. \u0412\u043a\u043b\u044e\u0447\u0430\u0439\u0442\u0435 \u0442\u043e\u043b\u044c\u043a\u043e \u043f\u0440\u0438 \u043f\u0440\u043e\u0431\u043b\u0435\u043c\u0430\u0445 \u0441\u043e \u0441\u0432\u044f\u0437\u044c\u044e \u2014 \u0441 DF=0 \u043a\u0440\u0443\u043f\u043d\u044b\u0435 \u043f\u0430\u043a\u0435\u0442\u044b \u043c\u043e\u0433\u0443\u0442 \u0444\u0440\u0430\u0433\u043c\u0435\u043d\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c\u0441\u044f \u043f\u043e \u043f\u0443\u0442\u0438.',
             scenarioLabel: '\u0421\u0446\u0435\u043d\u0430\u0440\u0438\u0439 \u043c\u0430\u0440\u0448\u0440\u0443\u0442\u0438\u0437\u0430\u0446\u0438\u0438',
             scenarioTunnel: '\u0422\u043e\u043b\u044c\u043a\u043e \u0442\u0443\u043d\u043d\u0435\u043b\u044c (\u0440\u0443\u0447\u043d\u044b\u0435 \u043c\u0430\u0440\u0448\u0440\u0443\u0442\u044b)',
             scenarioDns: 'DNS-\u043c\u0430\u0440\u0448\u0440\u0443\u0442\u0438\u0437\u0430\u0446\u0438\u044f \u0434\u043b\u044f \u0441\u0435\u0440\u0432\u0438\u0441\u043e\u0432',
@@ -2002,21 +2011,37 @@
 
     function getPrefixDistance(prefix) {
         var map = {
-            'awg-proxy': 1, 'awg-proxy-2': 2, 'awg-proxy-3': 3,
+            'awg-proxy-1': 1, 'awg-proxy': 1, 'awg-proxy-2': 2, 'awg-proxy-3': 3,
             'awg-proxy-4': 4, 'awg-proxy-5': 5
         };
         return map[prefix] || 1;
     }
 
     function buildNetwatch(prefix, commentTag) {
+        // Пиннинг зонда через route-rule: пингуем 8.8.8.8 с src-address = адрес WG-интерфейса,
+        // а /routing rule по этому src уводит пробу в отдельную probe-таблицу с /32 через ЭТОТ
+        // туннель. Таблица/маршрут/правило netwatch'ем НИКОГДА не трогаются, поэтому после
+        // disable дефолт-роута зонд по-прежнему тестирует ИМЕННО этот туннель → failback честный
+        // (нет ни вечного DOWN, ни ложного UP через чужой живой путь). Один probe-target 8.8.8.8
+        // на все туннели (каждый в своей таблице), без «магических» разных IP. Комментарий
+        // '-probe' ≠ commentTag → down/up-script (find comment=commentTag) probe-объекты не задевают.
+        // Все объекты тегированы prefix → uninstall (comment~prefix) убирает их за собой.
+        var probeTable = prefix + '-probe';
         var lines = [];
-        lines.push('# Netwatch: auto-failover for ' + prefix);
+        lines.push('# Netwatch: auto-failover for ' + prefix + ' (probe pinned via routing-rule -> ' + probeTable + ')');
         lines.push('{');
-        lines.push(':local wgAddr [/ip/address/get [find where interface=wg-' + prefix + '] address]');
-        lines.push(':set wgAddr [:pick $wgAddr 0 [:find $wgAddr "/"]]');
-        lines.push('/tool/netwatch/add host=1.1.1.1 type=icmp src-address=$wgAddr interval=15s timeout=3s comment=' + commentTag + ' \\');
-        lines.push('  down-script="/ip/route/disable [find where comment=' + commentTag + ' and dst-address=0.0.0.0/0]; :log warning \\"' + prefix + ' tunnel DOWN - route disabled\\"" \\');
-        lines.push('  up-script="/ip/route/enable [find where comment=' + commentTag + ' and dst-address=0.0.0.0/0]; :log info \\"' + prefix + ' tunnel UP - route enabled\\""');
+        // Guard: если на WG-интерфейсе нет IPv4 (битое/ручное состояние) — не роняем блок,
+        // просто логируем и пропускаем failover для этого туннеля. В штатной установке адрес
+        // ровно один. netwatch одной строкой (без \\-переносов) — безопасно внутри :if-блока.
+        lines.push(':local wgAddr ""');
+        lines.push(':do { :set wgAddr [/ip/address/get [find where interface=wg-' + prefix + '] address] } on-error={}');
+        lines.push(':if ([:len $wgAddr] > 0) do={');
+        lines.push('  :set wgAddr [:pick $wgAddr 0 [:find $wgAddr "/"]]');
+        lines.push('  :do { /routing/table/add name=' + probeTable + ' fib comment=' + commentTag + '-probe } on-error={}');
+        lines.push('  :do { /ip/route/add dst-address=8.8.8.8/32 gateway=wg-' + prefix + ' routing-table=' + probeTable + ' scope=10 comment=' + commentTag + '-probe } on-error={}');
+        lines.push('  :do { /routing/rule/add src-address=$wgAddr action=lookup table=' + probeTable + ' comment=' + commentTag + '-probe } on-error={}');
+        lines.push('  /tool/netwatch/add host=8.8.8.8 type=icmp src-address=$wgAddr interval=15s timeout=3s comment=' + commentTag + ' down-script="/ip/route/disable [find where comment=' + commentTag + ' and dst-address=0.0.0.0/0]; :log warning \\"' + prefix + ' tunnel DOWN - route disabled\\"" up-script="/ip/route/enable [find where comment=' + commentTag + ' and dst-address=0.0.0.0/0]; :log info \\"' + prefix + ' tunnel UP - route enabled\\""');
+        lines.push('} else={ :log warning ("failover: no IPv4 on wg-' + prefix + ', netwatch skipped") }');
         lines.push('}');
         return lines;
     }
@@ -2386,6 +2411,10 @@
             src.push('  /ip/route/remove [find where comment=' + prefix + '-dns]');
         }
         if (scenario !== 'tunnel') {
+            // Health-check (netwatch) гасим ПЕРВЫМ, чтобы он не дёргал маршруты во время чистки.
+            // Probe-таблицу/маршрут/правило (comment=<tag>-probe) подхватит общий prefix-sweep
+            // ниже (ip/route + routing/rule + routing/table).
+            src.push('  :do { /tool/netwatch/remove [find where comment~"' + prefix + '"] } on-error={}');
             src.push('  :do { /ip/route/remove [find where comment~"' + prefix + '"] } on-error={}');
             src.push('  :do { /ip/dns/static/remove [find where comment~"' + prefix + '"] } on-error={}');
             src.push('  :do { /ip/dns/forwarders/remove [find where comment~"' + prefix + '"] } on-error={}');
@@ -2397,7 +2426,6 @@
             src.push('  :do { /ip/firewall/address-list/remove [find where list="' + prefix + '-vpn-server"] } on-error={}');
             src.push('  :do { /ip/firewall/address-list/remove [find where comment~"' + prefix + '-excl-ip"] } on-error={}');
             src.push('  :do { /system/scheduler/remove [find where comment~"' + prefix + '"] } on-error={}');
-            src.push('  :do { /tool/netwatch/remove [find where comment~"' + prefix + '"] } on-error={}');
             src.push('  :do { /system/script/remove [find where comment~"' + prefix + '" and name!="' + prefix + '-uninstall"] } on-error={}');
             src = src.concat(buildFasttrackRestore(prefix));
         }
@@ -2472,6 +2500,10 @@
             src.push('  /ip/route/remove [find where comment=' + prefix + '-dns]');
         }
         if (scenario !== 'tunnel') {
+            // Health-check (netwatch) гасим ПЕРВЫМ, чтобы он не дёргал маршруты во время чистки.
+            // Probe-таблицу/маршрут/правило (comment=<tag>-probe) подхватит общий prefix-sweep
+            // ниже (ip/route + routing/rule + routing/table).
+            src.push('  :do { /tool/netwatch/remove [find where comment~"' + prefix + '"] } on-error={}');
             src.push('  :do { /ip/route/remove [find where comment~"' + prefix + '"] } on-error={}');
             src.push('  :do { /ip/dns/static/remove [find where comment~"' + prefix + '"] } on-error={}');
             src.push('  :do { /ip/dns/forwarders/remove [find where comment~"' + prefix + '"] } on-error={}');
@@ -2483,7 +2515,6 @@
             src.push('  :do { /ip/firewall/address-list/remove [find where list="' + prefix + '-vpn-server"] } on-error={}');
             src.push('  :do { /ip/firewall/address-list/remove [find where comment~"' + prefix + '-excl-ip"] } on-error={}');
             src.push('  :do { /system/scheduler/remove [find where comment~"' + prefix + '"] } on-error={}');
-            src.push('  :do { /tool/netwatch/remove [find where comment~"' + prefix + '"] } on-error={}');
             src.push('  :do { /system/script/remove [find where comment~"' + prefix + '" and name!="' + prefix + '-uninstall"] } on-error={}');
             src = src.concat(buildFasttrackRestore(prefix));
         }
@@ -2617,6 +2648,7 @@
         ['I1','I2','I3','I4','I5'].forEach(function(k) {
             if (i[k]) lines.push('/container/envs/add list=' + prefix + '-env key=AWG_' + k + ' value="' + i[k] + '"');
         });
+        if (dfEnabled()) lines.push('/container/envs/add list=' + prefix + '-env key=AWG_NO_DF value="1"');
 
         if (hasDNS) {
             var dnsStr = dnsServers.join(',');
@@ -2879,6 +2911,7 @@
         ['I1','I2','I3','I4','I5'].forEach(function(k) {
             if (i[k]) lines.push('  :put "export AWG_' + k + '=\\"' + i[k] + '\\""');
         });
+        if (dfEnabled()) lines.push('  :put "export AWG_NO_DF=\\"1\\""');
 
         lines.push('  :put ""');
         lines.push('  :put "chmod +x awg-proxy-linux-* && ./awg-proxy-linux-<arch>"');
@@ -2942,6 +2975,11 @@
         return 'container';
     }
 
+    function dfEnabled() {
+        var el = document.getElementById('df-enable');
+        return !!(el && el.checked);
+    }
+
     function onModeChange() {
         var mode = getDeployMode();
         var isS2S = mode === 'site-to-site';
@@ -2975,7 +3013,7 @@
         for (var i = 0; i < hubOpts.length; i++) hubOpts[i].style.display = isSrv ? '' : 'none';
         for (var i = 0; i < proxyOpts.length; i++) proxyOpts[i].style.display = isSrv ? 'none' : '';
         if (isSrv && prefixSel.value.indexOf('awg-proxy') === 0) prefixSel.value = 'awg-server-1';
-        if (!isSrv && prefixSel.value.indexOf('awg-server') === 0) prefixSel.value = 'awg-proxy';
+        if (!isSrv && prefixSel.value.indexOf('awg-server') === 0) prefixSel.value = 'awg-proxy-1';
         if (isS2S) ensureS2SParams();
         if (isSrv) ensureServerParams();
         _igRefresh();
@@ -3019,7 +3057,7 @@
         var sel = document.getElementById('prefix-select').value;
         if (sel === '__custom') {
             var v = document.getElementById('prefix-custom').value.trim();
-            return v || 'awg-proxy';
+            return v || 'awg-proxy-1';
         }
         return sel;
     }
@@ -3685,6 +3723,7 @@
         ls.push('/container/envs/add list=' + prefix + '-env key=AWG_CLIENT_PUB value="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="');
         ls.push('/container/envs/add list=' + prefix + '-env key=AWG_CLIENT_PUBS value="' + clientKey.publicKey + '"');
         if (dnsServer) ls.push('/container/envs/add list=' + prefix + '-env key=AWG_DNS value="' + dnsServer + '"');
+        if (dfEnabled()) ls.push('/container/envs/add list=' + prefix + '-env key=AWG_NO_DF value="1"');
         ls.push('/container/envs/add list=' + prefix + '-env key=AWG_CONFIG_URL value="' + shareURL + '"');
         ls.push('');
 
@@ -3755,6 +3794,7 @@
         lc.push('/container/envs/add list=' + prefix + '-env key=AWG_CLIENT_PUB value="' + clientKey.publicKey + '"');
         lc = lc.concat(cpsEnvLines(prefix, awgParams.cps));
         if (dnsServer) lc.push('/container/envs/add list=' + prefix + '-env key=AWG_DNS value="' + dnsServer + '"');
+        if (dfEnabled()) lc.push('/container/envs/add list=' + prefix + '-env key=AWG_NO_DF value="1"');
         lc.push('/container/envs/add list=' + prefix + '-env key=AWG_CONFIG_URL value="' + shareURL + '"');
         lc.push('');
 
@@ -3880,6 +3920,7 @@
         lc.push('/container/envs/add list=' + prefix + '-env key=AWG_CLIENT_PUB value="' + clientKey.publicKey + '"');
         lc = lc.concat(cpsEnvLines(prefix, awgParams.cps));
         if (dnsServer) lc.push('/container/envs/add list=' + prefix + '-env key=AWG_DNS value="' + dnsServer + '"');
+        if (dfEnabled()) lc.push('/container/envs/add list=' + prefix + '-env key=AWG_NO_DF value="1"');
         var nextURL = buildShareableURL(awgParams, serverWgPubKey, endpoint, awgPort, wgPort, tunnelCidr, prefix, clientNum + 1, netMode, urlParams.serverLAN);
         lc.push('/container/envs/add list=' + prefix + '-env key=AWG_CONFIG_URL value="' + nextURL + '"');
         lc.push('');
@@ -4094,6 +4135,7 @@
         la.push('/container/envs/add list=' + prefix + '-env key=AWG_SERVER_PUB value="' + keyB.publicKey + '"');
         la.push('/container/envs/add list=' + prefix + '-env key=AWG_CLIENT_PUB value="' + keyA.publicKey + '"');
         if (dnsServer) la.push('/container/envs/add list=' + prefix + '-env key=AWG_DNS value="' + dnsServer + '"');
+        if (dfEnabled()) la.push('/container/envs/add list=' + prefix + '-env key=AWG_NO_DF value="1"');
         la.push('');
 
         // Download + start
@@ -4160,6 +4202,7 @@
         lb = lb.concat(s2sObfEnvLines(prefix, awgParams));
         lb.push('/container/envs/add list=' + prefix + '-env key=AWG_SERVER_PUB value="' + keyB.publicKey + '"');
         lb.push('/container/envs/add list=' + prefix + '-env key=AWG_CLIENT_PUB value="' + keyA.publicKey + '"');
+        if (dfEnabled()) lb.push('/container/envs/add list=' + prefix + '-env key=AWG_NO_DF value="1"');
         lb.push('');
 
         // Download + start
@@ -4526,8 +4569,9 @@
         document.getElementById('storage-select').value = '__auto';
         document.getElementById('storage-custom').style.display = 'none';
         document.getElementById('storage-custom').value = '';
-        document.getElementById('prefix-select').value = 'awg-proxy';
+        document.getElementById('prefix-select').value = 'awg-proxy-1';
         document.getElementById('netwatch-enable').checked = true;
+        document.getElementById('df-enable').checked = false;
         document.getElementById('prefix-custom').style.display = 'none';
         document.getElementById('prefix-custom').value = '';
         document.getElementById('proxy-ip').value = '';

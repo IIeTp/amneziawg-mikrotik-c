@@ -469,10 +469,12 @@ With 3+ clients, this is easier to automate with a script on the server.
 | `AWG_FB_S1`, `AWG_FB_S2` | Yes** | -- | Init/response padding for the fallback profile |
 | `AWG_FB_S3` | No | `0` | Cookie reply padding for the fallback profile |
 | `AWG_FB_AFTER` | No | `20` | Seconds of remote silence before probing the other profile (initiator) |
-| `AWG_SRC_PORT` | No | auto | Outgoing port to server |
+| `AWG_SRC_PORT` | No | auto | Outgoing port to server: `auto` / number / `random` |
 | `AWG_TIMEOUT` | No | `180` | Inactivity timeout (sec) |
+| `AWG_DNS_REFRESH` | No | `60` | Background DNS re-check interval for a hostname in AWG_REMOTE (sec, `0` = off) |
 | `AWG_LOG_LEVEL` | No | `info` | Log level |
 | `AWG_NO_GRO` | No | `0` | Disable UDP GRO |
+| `AWG_NO_DF` | No | `0` | Clear the DF bit on UDP packets (workaround for DPI dropping DF=1) |
 | `AWG_SOCKET_BUF` | No | `16777216` | Socket buffer size |
 | `AWG_CPU_C2S` | No | `-1` | CPU for client→server thread |
 | `AWG_CPU_S2C` | No | `-1` | CPU for server→client thread |
@@ -603,12 +605,13 @@ In `reverse` and `server` modes, `AWG_REMOTE` points to the WireGuard server (no
 
 #### Optional -- Network and Diagnostics
 
-**`AWG_SRC_PORT`** -- outgoing UDP port for the connection to the AWG server. By default (`auto`), the proxy uses the WireGuard client's port -- this is needed for correct NAT operation on the router. If a number is specified, a fixed port is used.
+**`AWG_SRC_PORT`** -- outgoing UDP port for the connection to the AWG server. By default (`auto`), the proxy uses the WireGuard client's port -- this is needed for correct NAT operation on the router. If a number is specified, a fixed port is used. The value `random` leaves the choice to the kernel: no bind, a fresh ephemeral port on every reconnect -- useful behind CGN/carrier NAT where reusing the old port+server pair after a drop may get stuck.
 
 ```
 AWG_SRC_PORT=auto    # default, copies the WG client port
 AWG_SRC_PORT=0       # same as auto
 AWG_SRC_PORT=12345   # fixed port 12345
+AWG_SRC_PORT=random  # kernel-ephemeral port, new on every reconnect
 ```
 
 **`AWG_TIMEOUT`** -- inactivity timeout in seconds. If no packets are sent or received in either direction within this time, the proxy reconnects to the server (re-resolves DNS + new socket). Useful when the server's IP address changes behind DNS.
@@ -617,6 +620,13 @@ AWG_SRC_PORT=12345   # fixed port 12345
 AWG_TIMEOUT=180   # default, 3 minutes
 AWG_TIMEOUT=60    # aggressive timeout for unstable connections
 AWG_TIMEOUT=3600  # 1 hour, for stable links
+```
+
+**`AWG_DNS_REFRESH`** -- background DNS re-check interval in seconds when `AWG_REMOTE` is a hostname (disabled for a literal IP). The proxy periodically re-resolves the hostname and, if the current server IP has disappeared from the A records on two consecutive checks (round-robin DNS protection), reconnects to the new address without waiting for `AWG_TIMEOUT`. Granularity is 5 seconds. The reconnect resets the client session (same as on timeout) -- WireGuard performs a new handshake on its own.
+
+```
+AWG_DNS_REFRESH=60   # default, check once a minute
+AWG_DNS_REFRESH=0    # disable the background DNS check
 ```
 
 **`AWG_LOG_LEVEL`** -- logging level. Controls the verbosity of output in `/container/print` and the router's syslog.
@@ -638,6 +648,13 @@ AWG_LOG_LEVEL=none    # silence
 ```
 AWG_NO_GRO=0   # default, GRO enabled (if kernel supports it)
 AWG_NO_GRO=1   # force disable GRO, use recvmmsg instead
+```
+
+**`AWG_NO_DF`** -- clears the DF (Don't Fragment) bit on the proxy's outgoing UDP packets (`IP_MTU_DISCOVER=IP_PMTUDISC_DONT` on both sockets). Linux sends UDP with DF=1 by default (Path MTU Discovery); there are reports that some DPI nodes on certain networks handle DF=1 UDP worse than DF=0. This option changes the on-wire IP header, so it is off by default -- enable it only when experiencing connectivity issues: with DF=0 large packets may be fragmented along the path.
+
+```
+AWG_NO_DF=0   # default, DF bit as set by the system (usually DF=1)
+AWG_NO_DF=1   # clear the DF bit on the proxy's UDP packets
 ```
 
 **`AWG_SOCKET_BUF`** -- receive/send buffer sizes (SO_RCVBUF/SO_SNDBUF) for UDP sockets in bytes. The kernel typically doubles the requested value. Larger buffers reduce packet loss under load but consume more RAM.
@@ -816,7 +833,7 @@ Fix:
 
 **3. DNS resolution of AWG_REMOTE on Side A (client)**
 
-If `AWG_REMOTE` is a hostname, the container needs working DNS. Set `AWG_DNS=8.8.8.8` or `AWG_DNS=1.1.1.1` in the container environment variables. If DNS also goes through the tunnel (circular dependency), resolve the hostname manually and use the IP:
+If `AWG_REMOTE` is a hostname, the container needs working DNS. Set `AWG_DNS=8.8.8.8` or `AWG_DNS=1.1.1.1` in the container environment variables. The proxy re-checks DNS in the background (`AWG_DNS_REFRESH`, once per 60 s by default) and reconnects on its own when the server IP changes. If DNS also goes through the tunnel (circular dependency), resolve the hostname manually and use the IP:
 ```routeros
 :put [:resolve vpn.example.com]
 # Then set the resolved IP in AWG_REMOTE

@@ -309,6 +309,12 @@ int main(void) {
     if ((v = getenv("AWG_TIMEOUT")) && v[0])
         cfg->timeout = parse_int_str(v);
 
+    /* Periodic DNS re-resolve interval (hostname remotes only) */
+    cfg->dns_refresh = 60;
+    if ((v = getenv("AWG_DNS_REFRESH")) && v[0])
+        cfg->dns_refresh = parse_int_str(v);
+    if (cfg->dns_refresh < 0) cfg->dns_refresh = 0;
+
     /* Log level */
     cfg->log_level = LOG_INFO;
     v = getenv("AWG_LOG_LEVEL");
@@ -325,10 +331,14 @@ int main(void) {
     if ((v = getenv("AWG_SOCKET_BUF")) && v[0])
         cfg->socket_buf = parse_int_str(v);
 
-    /* Source port */
+    /* Source port: auto (default), fixed N, or "random" (kernel-ephemeral) */
     int src_port = 0;
-    if ((v = getenv("AWG_SRC_PORT")) && v[0])
-        src_port = parse_int_str(v);
+    if ((v = getenv("AWG_SRC_PORT")) && v[0]) {
+        if (strcmp(v, "random") == 0)
+            src_port = -1;
+        else
+            src_port = parse_int_str(v);
+    }
 
     /* CPU affinity */
     cfg->cpu_c2s = -1;
@@ -347,6 +357,12 @@ int main(void) {
     cfg->no_gro = 0;
     if ((v = getenv("AWG_NO_GRO")) && v[0])
         cfg->no_gro = parse_int_str(v);
+
+    /* No DF: clear the Don't-Fragment bit on UDP sockets (some DPI/middleboxes
+     * mishandle DF=1 UDP; opt-in, changes on-wire IP header behavior) */
+    cfg->no_df = 0;
+    if ((v = getenv("AWG_NO_DF")) && v[0])
+        cfg->no_df = parse_int_str(v);
 
     /* DNS resolver for hostname resolution */
     v = getenv("AWG_DNS");
@@ -380,7 +396,8 @@ int main(void) {
     {
         char spb[12];
         const char *parts[] = { "listen=", listen_str, " remote=", remote_str,
-            " src_port=", src_port > 0 ? u32_to_str(spb, src_port) : "auto" };
+            " src_port=", src_port > 0 ? u32_to_str(spb, src_port) :
+                          (src_port < 0 ? "random" : "auto") };
         log_infon(parts, 6);
     }
     {
@@ -431,6 +448,8 @@ int main(void) {
     }
     if (cfg->no_gro)
         log_info("config: UDP GRO disabled (AWG_NO_GRO=1)");
+    if (cfg->no_df)
+        log_info("config: DF bit cleared on UDP sockets (AWG_NO_DF=1)");
     if (cfg->cpu_c2s >= 0 || cfg->cpu_s2c >= 0 || cfg->busy_poll > 0) {
         char c2sb[12], s2cb[12], bpb[12];
         const char *parts[] = {
