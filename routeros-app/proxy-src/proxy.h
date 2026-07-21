@@ -34,6 +34,12 @@ typedef struct {
 #ifndef IPPROTO_UDP
 #define IPPROTO_UDP    17
 #endif
+#ifndef IP_MTU_DISCOVER
+#define IP_MTU_DISCOVER   10
+#endif
+#ifndef IP_PMTUDISC_DONT
+#define IP_PMTUDISC_DONT  0
+#endif
 
 typedef struct {
     /* === Hot fields === */
@@ -196,6 +202,10 @@ static inline struct sockaddr_in *session_find_sole_client(proxy_t *p) {
     session_entry_t *entry = session_find_sole_entry(p);
     return entry ? &entry->addr : NULL;
 }
+
+/* Re-check DNS A records for host: 0 = cur still present, 1 = cur gone,
+ * -1 = resolve error. Walks every record to tolerate round-robin DNS. */
+int resolve_addr_check(const char *host, const struct in_addr *cur);
 
 /* Initialize proxy. Returns 0 on success. */
 int proxy_init(proxy_t *p, awg_config_t *cfg,
