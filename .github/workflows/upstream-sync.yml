@@ -1,9 +1,15 @@
-name: Sync released upstream changes
+name: Sync upstream after release
 
 on:
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
+    inputs:
+      force:
+        description: Merge the current upstream main even without a new release
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   actions: write
@@ -57,32 +63,51 @@ jobs:
           echo "found=true" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-      - name: Merge the released upstream tag
+      - name: Merge upstream main
         id: merge
-        if: steps.release.outputs.found == 'true'
         env:
+          FORCE_SYNC: ${{ github.event.inputs.force == 'true' }}
+          RELEASE_FOUND: ${{ steps.release.outputs.found }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           git remote add upstream https://github.com/timbrs/amneziawg-mikrotik-c.git
           git fetch --no-tags upstream \
-            "refs/tags/$RELEASE_TAG:refs/tags/upstream/$RELEASE_TAG"
+            "+refs/heads/main:refs/remotes/upstream/main"
 
-          release_commit="$(git rev-parse --verify "refs/tags/upstream/$RELEASE_TAG^{commit}")"
+          if [[ "$RELEASE_FOUND" == "true" ]]; then
+            git fetch --no-tags upstream \
+              "refs/tags/$RELEASE_TAG:refs/tags/upstream/$RELEASE_TAG"
 
-          if git merge-base --is-ancestor "$release_commit" HEAD; then
+            release_commit="$(git rev-parse --verify "refs/tags/upstream/$RELEASE_TAG^{commit}")"
+            if [[ "$FORCE_SYNC" != "true" ]] &&
+              git merge-base --is-ancestor "$release_commit" HEAD; then
+              echo "needs_merge=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          elif [[ "$FORCE_SYNC" != "true" ]]; then
             echo "needs_merge=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          git merge --no-ff "$release_commit" \
-            -m "chore: sync upstream release $RELEASE_TAG"
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "needs_merge=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$RELEASE_FOUND" == "true" ]]; then
+            merge_message="chore: sync upstream/main after release $RELEASE_TAG"
+          else
+            merge_message="chore: manually sync upstream/main"
+          fi
+
+          git merge --no-ff upstream/main -m "$merge_message"
           echo "needs_merge=true" >> "$GITHUB_OUTPUT"
 
       - name: Run tests
         if: steps.merge.outputs.needs_merge == 'true'
         run: make test
 
-      - name: Push merged release
+      - name: Push merged upstream changes
         if: steps.merge.outputs.needs_merge == 'true'
         run: git push origin HEAD:main
 
