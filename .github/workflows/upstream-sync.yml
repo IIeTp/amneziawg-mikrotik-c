@@ -126,6 +126,7 @@ jobs:
                 .github/workflows/routeros-app-oci.yml \
                 routeros-app/Makefile \
                 routeros-app/scripts \
+                routeros-app/proxy-src/test.h \
                 app-store.yml; do
                 if git cat-file -e "$source_head:$path" 2>/dev/null; then
                   git checkout "$source_head" -- "$path"
@@ -135,7 +136,14 @@ jobs:
             fi
 
             while IFS= read -r -d '' path; do
-              if [[ "$is_merge_commit" == "true" ]]; then
+              if [[ "$is_merge_commit" == "true" ]] &&
+                [[ "$path" == routeros-app/proxy-src/* ]] &&
+                git cat-file -e ":3:$path" 2>/dev/null; then
+                # Upstream proxy sources are moved into the local RouterOS
+                # layout, so keep the upstream version of those files.
+                git checkout --theirs -- "$path"
+                git add -- "$path"
+              elif [[ "$is_merge_commit" == "true" ]]; then
                 # Preserve the existing Codex merge result while migrating
                 # the old history onto the current upstream base.
                 if git cat-file -e "$source_head:$path" 2>/dev/null; then
