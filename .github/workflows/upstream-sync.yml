@@ -101,10 +101,11 @@ jobs:
           fi
 
           # Rebase keeps upstream as the complete base and reapplies the
-          # Codex commits on top. During a rebase, "theirs" is the commit
-          # being replayed, so it is the correct side for local conflicts.
+          # Codex commits on top. The existing branch contains an older
+          # merge commit, so its local RouterOS integration paths must be
+          # carried over while that merge is recreated.
           set +e
-          GIT_EDITOR=true git rebase --rebase-merges --strategy-option=theirs upstream/main
+          GIT_EDITOR=true git rebase --rebase-merges upstream/main
           rebase_status=$?
           set -e
 
@@ -118,6 +119,19 @@ jobs:
             if [[ -n "$rebase_head" ]] &&
               [[ "$(git rev-list --parents -n 1 "$rebase_head" | wc -w)" -gt 2 ]]; then
               is_merge_commit=true
+            fi
+
+            if [[ "$is_merge_commit" == "true" ]]; then
+              for path in \
+                .github/workflows/routeros-app-oci.yml \
+                routeros-app/Makefile \
+                routeros-app/scripts \
+                app-store.yml; do
+                if git cat-file -e "$source_head:$path" 2>/dev/null; then
+                  git checkout "$source_head" -- "$path"
+                  git add -A -- "$path"
+                fi
+              done
             fi
 
             while IFS= read -r -d '' path; do
