@@ -66,15 +66,16 @@ jobs:
           echo "found=true" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-      - name: Merge upstream main into Codex branch
-        id: merge
+      - name: Rebase Codex branch onto upstream main
+        id: rebase
         env:
           FORCE_SYNC: ${{ github.event.inputs.force == 'true' }}
           RELEASE_FOUND: ${{ steps.release.outputs.found }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           git fetch origin "$CODEX_BRANCH"
-          git checkout --force -B "$CODEX_BRANCH" "origin/$CODEX_BRANCH"
+          source_head="$(git rev-parse "origin/$CODEX_BRANCH")"
+          git checkout --force -B "$CODEX_BRANCH" "$source_head"
           git remote add upstream https://github.com/timbrs/amneziawg-mikrotik-c.git
           git fetch --no-tags upstream \
             "+refs/heads/main:refs/remotes/upstream/main"
@@ -99,55 +100,76 @@ jobs:
             exit 0
           fi
 
-          if ! git merge --no-ff --no-commit upstream/main; then
-            git checkout --ours -- \
-              .github/workflows/routeros-app-oci.yml \
-              routeros-app/Makefile \
-              routeros-app/scripts \
-              app-store.yml
-            git checkout --theirs -- README.md
-            while IFS= read -r path; do
-              git checkout --theirs -- "$path"
-            done < <(git diff --name-only --diff-filter=U | grep '^routeros-app/proxy-src/' || true)
-            if git cat-file -e ":3:src/test_dns.c" 2>/dev/null; then
-              git show ":3:src/test_dns.c" > routeros-app/proxy-src/test_dns.c
+          # Rebase keeps upstream as the complete base and reapplies the
+          # Codex commits on top. During a rebase, "theirs" is the commit
+          # being replayed, so it is the correct side for local conflicts.
+          set +e
+          GIT_EDITOR=true git rebase --rebase-merges --strategy-option=theirs upstream/main
+          rebase_status=$?
+          set -e
+
+          while [[ "$rebase_status" -ne 0 ]]; do
+            if [[ ! -d .git/rebase-merge && ! -d .git/rebase-apply ]]; then
+              exit "$rebase_status"
             fi
-            git rm --ignore-unmatch -- \
-              Makefile \
-              Dockerfile \
-              build-c.sh \
-              README_en.md \
-              docs/configurator.html \
-              scripts/mkdockertar-c.sh \
-              scripts/mkdockertar.sh \
-              src/test_dns.c
+
+            rebase_head="$(git rev-parse --verify REBASE_HEAD 2>/dev/null || true)"
+            is_merge_commit=false
+            if [[ -n "$rebase_head" ]] &&
+              [[ "$(git rev-list --parents -n 1 "$rebase_head" | wc -w)" -gt 2 ]]; then
+              is_merge_commit=true
+            fi
+
+            while IFS= read -r -d '' path; do
+              if [[ "$is_merge_commit" == "true" ]]; then
+                # Preserve the existing Codex merge result while migrating
+                # the old history onto the current upstream base.
+                if git cat-file -e "$source_head:$path" 2>/dev/null; then
+                  git checkout "$source_head" -- "$path"
+                  git add -- "$path"
+                else
+                  git rm --ignore-unmatch -- "$path"
+                fi
+              elif git cat-file -e ":3:$path" 2>/dev/null; then
+                git checkout --theirs -- "$path"
+                git add -- "$path"
+              else
+                git rm --ignore-unmatch -- "$path"
+              fi
+            done < <(git diff --name-only --diff-filter=U -z)
 
             unresolved="$(git diff --name-only --diff-filter=U)"
             if [[ -n "$unresolved" ]]; then
-              printf 'Unexpected merge conflicts:\n%s\n' "$unresolved" >&2
+              printf 'Unexpected rebase conflicts:\n%s\n' "$unresolved" >&2
               exit 1
             fi
-          fi
 
-          git add --all
-          if [[ "$RELEASE_FOUND" == "true" ]]; then
-            merge_message="chore: sync upstream/main after release $RELEASE_TAG"
-          else
-            merge_message="chore: manually sync upstream/main"
-          fi
-          git commit -m "$merge_message"
-          echo "needs_merge=true" >> "$GITHUB_OUTPUT"
+            set +e
+            GIT_EDITOR=true git rebase --continue
+            rebase_status=$?
+            set -e
+
+            if [[ "$rebase_status" -ne 0 ]] &&
+              [[ -z "$(git diff --name-only --diff-filter=U)" ]] &&
+              git diff --cached --quiet && git diff --quiet; then
+              GIT_EDITOR=true git rebase --skip
+              rebase_status=$?
+            fi
+          done
+
+          echo "source_head=$source_head" >> "$GITHUB_OUTPUT"
+          echo "needs_rebase=true" >> "$GITHUB_OUTPUT"
 
       - name: Run tests
-        if: steps.merge.outputs.needs_merge == 'true'
+        if: steps.rebase.outputs.needs_rebase == 'true'
         run: make -C routeros-app test
 
-      - name: Push merged upstream changes
-        if: steps.merge.outputs.needs_merge == 'true'
-        run: git push origin "HEAD:refs/heads/$CODEX_BRANCH"
+      - name: Push rebased Codex branch
+        if: steps.rebase.outputs.needs_rebase == 'true'
+        run: git push --force-with-lease="refs/heads/$CODEX_BRANCH:${{ steps.rebase.outputs.source_head }}" origin "HEAD:refs/heads/$CODEX_BRANCH"
 
       - name: Publish RouterOS App images
-        if: steps.merge.outputs.needs_merge == 'true'
+        if: steps.rebase.outputs.needs_rebase == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
