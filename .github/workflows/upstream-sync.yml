@@ -188,7 +188,13 @@ jobs:
 
       - name: Push rebased Codex branch
         if: steps.rebase.outputs.needs_rebase == 'true'
-        run: git push --force-with-lease="refs/heads/$CODEX_BRANCH:${{ steps.rebase.outputs.source_head }}" origin "HEAD:refs/heads/$CODEX_BRANCH"
+        env:
+          PUSH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN || github.token }}
+        run: |
+          git push \
+            --force-with-lease="refs/heads/$CODEX_BRANCH:${{ steps.rebase.outputs.source_head }}" \
+            "https://x-access-token:${PUSH_TOKEN}@github.com/${{ github.repository }}.git" \
+            "HEAD:refs/heads/$CODEX_BRANCH"
 
       - name: Publish RouterOS App images
         if: steps.rebase.outputs.needs_rebase == 'true'
